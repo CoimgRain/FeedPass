@@ -145,3 +145,7 @@
 #ifndef MQTT_STATUS_INTERVAL_MS
 #define MQTT_STATUS_INTERVAL_MS 5000
 #endif
+
+#ifndef DEVICE_ACCESS_PIN
+#define DEVICE_ACCESS_PIN ""
+#endif

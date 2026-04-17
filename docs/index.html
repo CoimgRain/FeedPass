@@ -209,9 +209,64 @@
         font-size: 12px;
         line-height: 1.65;
       }
+
+      .lock-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(33, 25, 19, 0.4);
+        backdrop-filter: blur(14px);
+      }
+
+      .lock-screen.hidden {
+        display: none;
+      }
+
+      .lock-card {
+        width: min(100%, 400px);
+        background: rgba(255, 250, 243, 0.97);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 24px;
+        box-shadow: 0 30px 90px rgba(20, 12, 8, 0.2);
+      }
+
+      .lock-card h2 {
+        margin: 0 0 10px;
+        font-size: 24px;
+      }
+
+      .lock-card p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 14px;
+      }
+
+      .pin-input {
+        letter-spacing: 0.42em;
+        text-align: center;
+        font-size: 22px;
+        font-weight: 700;
+      }
     </style>
   </head>
   <body>
+    <section id="lockScreen" class="lock-screen">
+      <div class="lock-card">
+        <h2>输入控制码</h2>
+        <p>这张公网控制页现在需要 4 位数字控制码。输对以后才能真正发送投喂、调试、停止和计划指令。</p>
+        <div class="stack">
+          <input id="pinInput" class="pin-input" inputmode="numeric" maxlength="4" placeholder="0000" />
+          <button id="unlockBtn" class="primary">进入控制页</button>
+          <div id="unlockMessage" class="message"></div>
+        </div>
+      </div>
+    </section>
+
     <div class="wrap">
       <section class="hero">
         <h1>FitPass Control</h1>
@@ -347,6 +402,7 @@
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script>
       const storageKey = "fitpass-unified-control-v1";
+      const pinStorageKey = "fitpass-public-access-pin";
       const defaults = {
         localBaseUrl: "",
         brokerUrl: "wss://broker.emqx.io:8084/mqtt",
@@ -373,10 +429,15 @@
       const debugDirectionEl = document.getElementById("debugDirection");
       const debugSpeedEl = document.getElementById("debugSpeed");
       const speedLabelEl = document.getElementById("speedLabel");
+      const lockScreenEl = document.getElementById("lockScreen");
+      const pinInputEl = document.getElementById("pinInput");
+      const unlockBtnEl = document.getElementById("unlockBtn");
+      const unlockMessageEl = document.getElementById("unlockMessage");
 
       let mqttClient = null;
       let activeMode = "none";
       let lastStatus = null;
+      let accessPin = "";
 
       function fillPortions() {
         for (const select of [manualPortionEl, schedulePortionEl]) {
@@ -430,6 +491,11 @@
         messageEl.style.color = isError ? "#a24444" : "#76695d";
       }
 
+      function showUnlockMessage(text, isError = false) {
+        unlockMessageEl.textContent = text || "";
+        unlockMessageEl.style.color = isError ? "#a24444" : "#76695d";
+      }
+
       function renderSlots(times) {
         slotListEl.innerHTML = "";
         const safe = (times && times.length ? times : ["08:00", "18:00"]).slice(0, 6);
@@ -456,6 +522,19 @@
 
       function renderSpeedLabel(value) {
         speedLabelEl.textContent = `速度 ${value}`;
+      }
+
+      function ensureUnlocked() {
+        if (/^\d{4}$/.test(accessPin)) {
+          return true;
+        }
+        lockScreenEl.classList.remove("hidden");
+        showUnlockMessage("先输入 4 位数字控制码", true);
+        return false;
+      }
+
+      function withPinPayload(payload) {
+        return `${payload}&pin=${accessPin}`;
       }
 
       function localApi(path) {
@@ -526,7 +605,7 @@
         mqttClient.on("connect", () => {
           mqttClient.subscribe(statusTopic(), { qos: 0 });
           setMode("外网云桥已连上", true);
-          mqttClient.publish(commandTopic(), "action=status");
+          mqttClient.publish(commandTopic(), withPinPayload("action=status"));
         });
 
         mqttClient.on("close", () => {
@@ -556,6 +635,9 @@
       }
 
       async function connectUnified() {
+        if (!ensureUnlocked()) {
+          return;
+        }
         saveConfig();
         setMode("连接中", false);
         showMessage(localBaseUrlEl.value.trim() ? "先尝试本地直连..." : "未填写局域网地址，直接连接外网云桥...");
@@ -574,6 +656,9 @@
       }
 
       async function refreshStatus() {
+        if (!ensureUnlocked()) {
+          return;
+        }
         if (activeMode === "local") {
           try {
             const data = await localRequest("/api/status");
@@ -587,12 +672,12 @@
         activeMode = "remote";
         ensureMqttConnection();
         if (mqttClient && mqttClient.connected) {
-          mqttClient.publish(commandTopic(), "action=status");
+          mqttClient.publish(commandTopic(), withPinPayload("action=status"));
         }
       }
 
       async function sendLocal(path, form) {
-        const body = new URLSearchParams(form).toString();
+        const body = new URLSearchParams({ ...form, pin: accessPin }).toString();
         const data = await localRequest(path, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -602,18 +687,24 @@
       }
 
       function sendRemote(payload, message) {
+        if (!ensureUnlocked()) {
+          return;
+        }
         ensureMqttConnection();
         if (!mqttClient || !mqttClient.connected) {
           showMessage("云桥还没连上", true);
           return;
         }
-        mqttClient.publish(commandTopic(), payload, { qos: 0, retain: false });
+        mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 0, retain: false });
         activeMode = "remote";
         setMode("正在走外网云桥", true);
         showMessage(message);
       }
 
       async function unifiedAction(action) {
+        if (!ensureUnlocked()) {
+          return;
+        }
         const speed = debugSpeedEl.value;
         const direction = debugDirectionEl.value;
         const slots = collectSlots().join(",");
@@ -664,6 +755,19 @@
         }
       }
 
+      function unlockWithPin() {
+        const pin = pinInputEl.value.trim();
+        if (!/^\d{4}$/.test(pin)) {
+          showUnlockMessage("请输入 4 位数字控制码", true);
+          return;
+        }
+        accessPin = pin;
+        localStorage.setItem(pinStorageKey, pin);
+        lockScreenEl.classList.add("hidden");
+        showUnlockMessage("");
+        connectUnified();
+      }
+
       fillPortions();
       loadConfig();
       renderSlots(["08:00", "18:00"]);
@@ -677,8 +781,21 @@
       document.getElementById("saveScheduleBtn").addEventListener("click", () => unifiedAction("schedule"));
       document.getElementById("addSlotBtn").addEventListener("click", () => addSlot());
       debugSpeedEl.addEventListener("input", () => renderSpeedLabel(debugSpeedEl.value));
+      unlockBtnEl.addEventListener("click", unlockWithPin);
+      pinInputEl.addEventListener("input", () => {
+        pinInputEl.value = pinInputEl.value.replace(/\D+/g, "").slice(0, 4);
+      });
+      pinInputEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          unlockWithPin();
+        }
+      });
 
-      connectUnified();
+      const rememberedPin = localStorage.getItem(pinStorageKey) || "";
+      if (/^\d{4}$/.test(rememberedPin)) {
+        pinInputEl.value = rememberedPin;
+        unlockWithPin();
+      }
     </script>
   </body>
 </html>

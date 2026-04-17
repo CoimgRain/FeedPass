@@ -116,6 +116,16 @@ String remoteClientId() {
   return String(buffer);
 }
 
+bool isAccessPinEnabled() {
+  return strlen(DEVICE_ACCESS_PIN) > 0;
+}
+
+bool isAuthorizedPin(const String &pin) {
+  return !isAccessPinEnabled() || pin == String(DEVICE_ACCESS_PIN);
+}
+
+void sendJson(int code, const String &body);
+
 String extractCommandValue(const String &payload, const char *key) {
   const String needle = String(key) + "=";
   const int start = payload.indexOf(needle);
@@ -132,6 +142,15 @@ String extractCommandValue(const String &payload, const char *key) {
   String value = payload.substring(valueStart, valueEnd);
   value.replace("+", " ");
   return value;
+}
+
+bool ensureLocalAuthorized() {
+  if (isAuthorizedPin(server.arg("pin"))) {
+    return true;
+  }
+
+  sendJson(401, "{\"error\":\"invalid pin\"}");
+  return false;
 }
 
 void publishRemoteStatus(bool force = false);
@@ -440,6 +459,8 @@ String statusJson() {
   json += isRemoteControlEnabled() ? "true," : "false,";
   json += "\"remoteConnected\":";
   json += remoteBrokerConnected ? "true," : "false,";
+  json += "\"accessPinEnabled\":";
+  json += isAccessPinEnabled() ? "true," : "false,";
   json += "\"remoteDeviceId\":\"" + jsonEscape(String(REMOTE_DEVICE_ID)) + "\",";
   json += "\"stationIp\":\"" + getStationIp() + "\",";
   json += "\"apIp\":\"" + getApIp() + "\",";
@@ -480,6 +501,10 @@ void handleOptions() {
 }
 
 void handleManualFeed() {
+  if (!ensureLocalAuthorized()) {
+    return;
+  }
+
   const int requestedPortion = server.hasArg("portion") ? server.arg("portion").toInt() : defaultPortionSteps;
   if (requestedPortion < 1 || requestedPortion > MAX_PORTION_STEPS) {
     sendJson(400, "{\"error\":\"portion out of range\"}");
@@ -495,6 +520,10 @@ void handleManualFeed() {
 }
 
 void handleDebugStart() {
+  if (!ensureLocalAuthorized()) {
+    return;
+  }
+
   String direction = server.hasArg("direction") ? server.arg("direction") : "forward";
   direction.toLowerCase();
   const int requestedSpeed = server.hasArg("speed") ? server.arg("speed").toInt() : debugSpeedLevel;
@@ -513,11 +542,19 @@ void handleDebugStart() {
 }
 
 void handleStop() {
+  if (!ensureLocalAuthorized()) {
+    return;
+  }
+
   stopMotion("user-stop");
   sendJson(200, statusJson());
 }
 
 void handleScheduleSave() {
+  if (!ensureLocalAuthorized()) {
+    return;
+  }
+
   const String slots = server.arg("slots");
   const int portion = server.hasArg("portion") ? server.arg("portion").toInt() : defaultPortionSteps;
 
@@ -545,6 +582,11 @@ void handleRemoteCommand(const String &payload) {
   }
 
   Serial.printf("[REMOTE] action=%s payload=%s\n", action.c_str(), payload.c_str());
+
+  if (action != "status" && !isAuthorizedPin(extractCommandValue(payload, "pin"))) {
+    Serial.printf("[REMOTE] rejected action=%s because pin is invalid\n", action.c_str());
+    return;
+  }
 
   if (action == "feed") {
     const int portion = extractCommandValue(payload, "portion").toInt();
