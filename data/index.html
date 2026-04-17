@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>FitPass Control</title>
+    <style>
+      :root {
+        --bg: #f6f1e8;
+        --panel: rgba(255, 251, 245, 0.92);
+        --ink: #212121;
+        --muted: #6d6258;
+        --line: rgba(33, 33, 33, 0.12);
+        --primary: #c75c2a;
+        --primary-strong: #9f451d;
+        --secondary: #2e6b5f;
+        --danger: #a63d40;
+        --shadow: 0 18px 50px rgba(78, 52, 30, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255, 255, 255, 0.72), transparent 32%),
+          linear-gradient(180deg, #f8efe3 0%, #efe2cf 100%);
+        color: var(--ink);
+      }
+
+      .app {
+        width: min(100%, 620px);
+        margin: 0 auto;
+        padding: 20px 16px 40px;
+      }
+
+      .hero {
+        padding: 10px 4px 22px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        letter-spacing: -0.04em;
+      }
+
+      .sub {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 18px;
+        margin-bottom: 14px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .card h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+
+      .meta {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .meta-item {
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(33, 33, 33, 0.08);
+      }
+
+      .label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .value {
+        font-size: 15px;
+        font-weight: 600;
+        word-break: break-word;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .row.wrap {
+        flex-wrap: wrap;
+      }
+
+      .slot-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .slot {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      input,
+      select,
+      button {
+        border: 1px solid rgba(33, 33, 33, 0.12);
+        border-radius: 16px;
+        min-height: 46px;
+        font: inherit;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 0 14px;
+        background: rgba(255, 255, 255, 0.88);
+      }
+
+      button {
+        border: none;
+        padding: 0 16px;
+        color: white;
+        background: var(--primary);
+        font-weight: 700;
+      }
+
+      button.secondary {
+        background: var(--secondary);
+      }
+
+      button.ghost {
+        color: var(--ink);
+        background: rgba(33, 33, 33, 0.08);
+      }
+
+      button.danger {
+        background: var(--danger);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+      }
+
+      .grow {
+        flex: 1;
+      }
+
+      .note {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 999px;
+        background: rgba(46, 107, 95, 0.12);
+        color: var(--secondary);
+        font-weight: 700;
+        font-size: 13px;
+      }
+
+      .status-pill.offline {
+        background: rgba(166, 61, 64, 0.12);
+        color: var(--danger);
+      }
+
+      .message {
+        margin-top: 10px;
+        min-height: 20px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .speed-readout {
+        min-width: 96px;
+        text-align: center;
+        font-weight: 700;
+        color: var(--primary-strong);
+      }
+
+      @media (max-width: 480px) {
+        .meta {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <section class="hero">
+        <h1>FitPass</h1>
+        <div class="sub">现在这就是你的控制窗口。你可以直接点运行、调试、停止，也可以继续设置每天的定时投喂。</div>
+      </section>
+
+      <section class="card">
+        <div class="row wrap" style="justify-content: space-between">
+          <h2>设备状态</h2>
+          <div id="syncState" class="status-pill">读取中</div>
+        </div>
+        <div class="meta">
+          <div class="meta-item">
+            <span class="label">当前时间</span>
+            <span id="now" class="value">-</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">当前状态</span>
+            <span id="motion" class="value">-</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">局域网地址</span>
+            <span id="stationIp" class="value">-</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">热点地址</span>
+            <span id="apIp" class="value">-</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">默认份量</span>
+            <span id="currentPortion" class="value">-</span>
+          </div>
+          <div class="meta-item">
+            <span class="label">引脚映射</span>
+            <span id="pinMap" class="value">-</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>运行窗口</h2>
+        <div class="stack">
+          <div class="row">
+            <select id="manualPortion" class="grow"></select>
+            <button id="feedBtn" class="secondary">运行投喂</button>
+          </div>
+          <div class="note">当前程序已经按 `ULN2003 + 28BYJ-48` 写成了真正的步进电机驱动。这里的“一份”现在是软件标定值，后面可以继续校准。</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>调试窗口</h2>
+        <div class="stack">
+          <div class="row">
+            <select id="debugDirection" class="grow">
+              <option value="forward">正转调试</option>
+              <option value="reverse">反转调试</option>
+            </select>
+            <div id="debugSpeedLabel" class="speed-readout">速度 6</div>
+          </div>
+          <div class="row">
+            <input id="debugSpeed" type="range" min="1" max="10" step="1" value="6" />
+          </div>
+          <div class="row">
+            <button id="debugBtn">调试运行</button>
+            <button id="stopBtn" class="danger">停止</button>
+          </div>
+          <div class="note">调试模式会持续转动，直到你点击“停止”。如果发现方向反了，可以直接切到“反转调试”；速度越大，转得越快。</div>
+          <div id="message" class="message"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>定时计划</h2>
+        <div class="stack">
+          <div id="slotList" class="slot-list"></div>
+          <div class="row wrap">
+            <button id="addSlotBtn" class="ghost">新增时间</button>
+            <button id="saveBtn">保存计划</button>
+          </div>
+          <div class="row">
+            <span style="min-width: 84px">默认份量</span>
+            <select id="schedulePortion" class="grow"></select>
+          </div>
+          <div class="note">最多 6 个时间点，例如早上 08:00、晚上 18:00。保存后会写入 ESP32 本地存储。</div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const maxSlots = 6;
+      const slotList = document.getElementById("slotList");
+      const syncState = document.getElementById("syncState");
+      const nowEl = document.getElementById("now");
+      const motionEl = document.getElementById("motion");
+      const stationIpEl = document.getElementById("stationIp");
+      const apIpEl = document.getElementById("apIp");
+      const currentPortionEl = document.getElementById("currentPortion");
+      const pinMapEl = document.getElementById("pinMap");
+      const manualPortionEl = document.getElementById("manualPortion");
+      const schedulePortionEl = document.getElementById("schedulePortion");
+      const debugDirectionEl = document.getElementById("debugDirection");
+      const debugSpeedEl = document.getElementById("debugSpeed");
+      const debugSpeedLabelEl = document.getElementById("debugSpeedLabel");
+      const feedBtn = document.getElementById("feedBtn");
+      const debugBtn = document.getElementById("debugBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const addSlotBtn = document.getElementById("addSlotBtn");
+      const messageEl = document.getElementById("message");
+
+      function fillPortionSelect(select) {
+        select.innerHTML = "";
+        for (let i = 1; i <= 6; i += 1) {
+          const option = document.createElement("option");
+          option.value = String(i);
+          option.textContent = `${i} 份`;
+          select.appendChild(option);
+        }
+      }
+
+      function renderSlots(times) {
+        slotList.innerHTML = "";
+        const safeTimes = times.slice(0, maxSlots);
+        safeTimes.forEach((time) => addSlotRow(time));
+        if (safeTimes.length === 0) {
+          addSlotRow("08:00");
+          addSlotRow("18:00");
+        }
+      }
+
+      function addSlotRow(value = "12:00") {
+        if (slotList.children.length >= maxSlots) return;
+
+        const row = document.createElement("div");
+        row.className = "slot";
+        row.innerHTML = `
+          <input type="time" class="grow" value="${value}" />
+          <button class="danger" type="button">删除</button>
+        `;
+
+        row.querySelector("button").addEventListener("click", () => row.remove());
+        slotList.appendChild(row);
+      }
+
+      function collectSlots() {
+        return [...slotList.querySelectorAll("input[type='time']")]
+          .map((input) => input.value)
+          .filter(Boolean);
+      }
+
+      function setSyncBadge(data) {
+        const ok = data.timeSynced;
+        syncState.textContent = ok ? "时钟已同步" : "等待校时";
+        syncState.className = ok ? "status-pill" : "status-pill offline";
+      }
+
+      function showMessage(text, isError = false) {
+        messageEl.textContent = text || "";
+        messageEl.style.color = isError ? "#a63d40" : "#6d6258";
+      }
+
+      function renderDebugSpeed(value) {
+        debugSpeedLabelEl.textContent = `速度 ${value}`;
+      }
+
+      async function request(path, options) {
+        const response = await fetch(path, options);
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "请求失败");
+        }
+        return data;
+      }
+
+      function syncButtons(data) {
+        const busy = !!data.motorRunning;
+        feedBtn.disabled = busy;
+        debugBtn.disabled = busy;
+        stopBtn.disabled = !busy;
+
+        feedBtn.textContent = busy && data.motion === "manual-feed" ? "运行中..." : "运行投喂";
+        debugBtn.textContent = busy && data.motion === "debug" ? "调试中..." : "调试运行";
+      }
+
+      function applyStatus(data) {
+        setSyncBadge(data);
+        nowEl.textContent = data.now || "-";
+        motionEl.textContent = `${data.motionLabel || "-"} / ${data.directionLabel || "-"}`;
+        stationIpEl.textContent = data.stationIp || "未连接";
+        apIpEl.textContent = data.apIp || "-";
+        currentPortionEl.textContent = `${data.defaultPortion} 份`;
+        pinMapEl.textContent = data.pinMap || "-";
+        manualPortionEl.value = String(data.defaultPortion);
+        schedulePortionEl.value = String(data.defaultPortion);
+        if (data.debugSpeedLevel) {
+          debugSpeedEl.value = String(data.debugSpeedLevel);
+          renderDebugSpeed(data.debugSpeedLevel);
+        }
+        renderSlots((data.schedule || []).map((item) => item.time));
+        syncButtons(data);
+      }
+
+      async function refresh() {
+        const data = await request("/api/status");
+        applyStatus(data);
+      }
+
+      async function saveSchedule() {
+        saveBtn.disabled = true;
+        try {
+          const form = new URLSearchParams();
+          form.set("slots", collectSlots().join(","));
+          form.set("portion", schedulePortionEl.value);
+          const data = await request("/api/schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: form.toString(),
+          });
+          showMessage("定时计划已保存");
+          applyStatus(data);
+        } catch (error) {
+          showMessage(error.message, true);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      }
+
+      async function manualFeed() {
+        try {
+          const form = new URLSearchParams();
+          form.set("portion", manualPortionEl.value);
+          const data = await request("/api/feed", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: form.toString(),
+          });
+          showMessage("已开始运行投喂");
+          applyStatus(data);
+        } catch (error) {
+          showMessage(error.message, true);
+        }
+      }
+
+      async function startDebug() {
+        try {
+          const form = new URLSearchParams();
+          form.set("direction", debugDirectionEl.value);
+          form.set("speed", debugSpeedEl.value);
+          const data = await request("/api/debug/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: form.toString(),
+          });
+          showMessage(`已进入${debugDirectionEl.value === "forward" ? "正转" : "反转"}调试模式，速度 ${debugSpeedEl.value}`);
+          applyStatus(data);
+        } catch (error) {
+          showMessage(error.message, true);
+        }
+      }
+
+      async function stopMotion() {
+        try {
+          const data = await request("/api/debug/stop", { method: "POST" });
+          showMessage("电机已停止");
+          applyStatus(data);
+        } catch (error) {
+          showMessage(error.message, true);
+        }
+      }
+
+      fillPortionSelect(manualPortionEl);
+      fillPortionSelect(schedulePortionEl);
+      renderDebugSpeed(debugSpeedEl.value);
+      addSlotBtn.addEventListener("click", () => addSlotRow());
+      debugSpeedEl.addEventListener("input", () => renderDebugSpeed(debugSpeedEl.value));
+      saveBtn.addEventListener("click", saveSchedule);
+      feedBtn.addEventListener("click", manualFeed);
+      debugBtn.addEventListener("click", startDebug);
+      stopBtn.addEventListener("click", stopMotion);
+
+      refresh()
+        .then(() => showMessage("控制窗口已连接"))
+        .catch((error) => {
+          syncState.textContent = error.message;
+          syncState.className = "status-pill offline";
+          showMessage(error.message, true);
+        });
+
+      setInterval(() => refresh().catch(() => {}), 2000);
+    </script>
+  </body>
+</html>

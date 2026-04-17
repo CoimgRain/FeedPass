@@ -1,0 +1,9 @@
+.DS_Store
+.pio/
+.venv/
+.vscode/
+include/wifi_secrets.h
+include/app_config_local.h
+
+
+.venv/

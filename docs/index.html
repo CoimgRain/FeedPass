@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FitPass Control</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5efe6;
+        --card: rgba(255, 252, 247, 0.93);
+        --text: #292420;
+        --muted: #76695d;
+        --line: rgba(58, 45, 34, 0.12);
+        --accent: #dc6f43;
+        --accent-strong: #be5328;
+        --danger: #a24444;
+        --ok: #4c7a60;
+        --shadow: 0 24px 72px rgba(63, 41, 22, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "SF Pro SC", "PingFang SC", "Noto Sans SC", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(220, 111, 67, 0.17), transparent 28%),
+          radial-gradient(circle at bottom left, rgba(80, 130, 102, 0.15), transparent 24%),
+          linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+      }
+
+      .wrap {
+        width: min(1040px, calc(100vw - 28px));
+        margin: 0 auto;
+        padding: 24px 0 48px;
+      }
+
+      .hero {
+        padding: 8px 4px 18px;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(30px, 8vw, 48px);
+        letter-spacing: -0.04em;
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      @media (min-width: 920px) {
+        .grid.two {
+          grid-template-columns: 1.05fr 0.95fr;
+        }
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+      }
+
+      .card h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .row > * { flex: 1 1 0; }
+      .row > button,
+      .row > .pill {
+        flex: 0 0 auto;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input,
+      select,
+      button,
+      textarea {
+        width: 100%;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--text);
+        padding: 13px 14px;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 700;
+        transition: transform 120ms ease, background 120ms ease;
+      }
+
+      button:hover { transform: translateY(-1px); }
+
+      .primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        color: #fff;
+        border-color: transparent;
+      }
+
+      .ghost {
+        background: rgba(255,255,255,0.55);
+      }
+
+      .danger {
+        background: rgba(162, 68, 68, 0.12);
+        color: var(--danger);
+      }
+
+      .pill {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(76, 122, 96, 0.12);
+        color: var(--ok);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .pill.offline {
+        background: rgba(162, 68, 68, 0.12);
+        color: var(--danger);
+      }
+
+      .meta {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
+      .meta-item {
+        border-radius: 18px;
+        padding: 14px;
+        background: rgba(255,255,255,0.68);
+        border: 1px solid var(--line);
+      }
+
+      .meta-item .label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .meta-item .value {
+        font-size: 15px;
+        font-weight: 700;
+        word-break: break-word;
+      }
+
+      .slot-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .slot-item {
+        display: flex;
+        gap: 10px;
+      }
+
+      .slot-item input { flex: 1 1 auto; }
+      .slot-item button { flex: 0 0 auto; width: auto; }
+
+      .message {
+        min-height: 20px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .fine {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <h1>FitPass Control</h1>
+        <p>这一张页面默认直接走外网云桥，所以不在家也能控制；如果你以后想在家里优先走局域网，可以手动填上家里的 ESP32 地址。</p>
+      </section>
+
+      <div class="grid two">
+        <section class="card stack">
+          <div class="row">
+            <h2 style="margin:0; flex:1 1 auto">统一连接设置</h2>
+            <span id="controlMode" class="pill offline">未连接</span>
+          </div>
+
+          <label>
+            家里局域网地址
+            <input id="localBaseUrl" placeholder="例如：http://192.168.1.181" />
+          </label>
+
+          <div class="row">
+            <label>
+              MQTT WebSocket 地址
+              <input id="brokerUrl" value="wss://broker.emqx.io:8084/mqtt" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label>
+              Topic Root
+              <input id="topicRoot" value="fitpass-268d55c3348537845960bb9b" />
+            </label>
+            <label>
+              设备 ID
+              <input id="deviceId" value="fitpass-52fe04f8aa9d7bf440c7fad3" />
+            </label>
+          </div>
+
+          <div class="row">
+            <button id="connectBtn" class="primary">开始连接</button>
+            <button id="refreshBtn" class="ghost">刷新状态</button>
+          </div>
+
+          <div class="fine">
+            连接逻辑：
+            1. 如果填了家里局域网地址，先试本地直连；
+            2. 如果没填，或当前不在家不可达，再自动切到 MQTT 云桥。
+          </div>
+        </section>
+
+        <section class="card stack">
+          <h2>设备状态</h2>
+          <div class="meta">
+            <div class="meta-item">
+              <span class="label">当前时间</span>
+              <span id="now" class="value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="label">运行状态</span>
+              <span id="motion" class="value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="label">默认份量</span>
+              <span id="portion" class="value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="label">ESP32 局域网地址</span>
+              <span id="stationIp" class="value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="label">远程云桥</span>
+              <span id="remoteConnected" class="value">-</span>
+            </div>
+            <div class="meta-item">
+              <span class="label">工作模式</span>
+              <span id="activeChannel" class="value">-</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="grid two" style="margin-top:16px;">
+        <section class="card stack">
+          <h2>运行控制</h2>
+          <div class="row">
+            <label>
+              投喂份量
+              <select id="manualPortion"></select>
+            </label>
+            <button id="feedBtn" class="primary">投喂</button>
+          </div>
+
+          <div class="row">
+            <label>
+              调试方向
+              <select id="debugDirection">
+                <option value="forward">正转</option>
+                <option value="reverse">反转</option>
+              </select>
+            </label>
+            <label>
+              调试速度
+              <input id="debugSpeed" type="range" min="1" max="10" step="1" value="6" />
+            </label>
+            <div id="speedLabel" class="pill">速度 6</div>
+          </div>
+
+          <div class="row">
+            <button id="debugBtn">开始调试</button>
+            <button id="stopBtn" class="danger">停止</button>
+          </div>
+        </section>
+
+        <section class="card stack">
+          <h2>定时计划</h2>
+          <div id="slotList" class="slot-list"></div>
+          <div class="row">
+            <button id="addSlotBtn" class="ghost">新增时间</button>
+            <label>
+              默认份量
+              <select id="schedulePortion"></select>
+            </label>
+          </div>
+          <button id="saveScheduleBtn" class="primary">保存计划</button>
+        </section>
+      </div>
+
+      <section class="card stack" style="margin-top:16px;">
+        <h2>消息与状态 JSON</h2>
+        <div id="message" class="message"></div>
+        <textarea id="statusRaw" readonly placeholder="状态 JSON 会显示在这里"></textarea>
+      </section>
+    </div>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+      const storageKey = "fitpass-unified-control-v1";
+      const defaults = {
+        localBaseUrl: "",
+        brokerUrl: "wss://broker.emqx.io:8084/mqtt",
+        topicRoot: "fitpass-268d55c3348537845960bb9b",
+        deviceId: "fitpass-52fe04f8aa9d7bf440c7fad3",
+      };
+
+      const localBaseUrlEl = document.getElementById("localBaseUrl");
+      const brokerUrlEl = document.getElementById("brokerUrl");
+      const topicRootEl = document.getElementById("topicRoot");
+      const deviceIdEl = document.getElementById("deviceId");
+      const controlModeEl = document.getElementById("controlMode");
+      const nowEl = document.getElementById("now");
+      const motionEl = document.getElementById("motion");
+      const portionEl = document.getElementById("portion");
+      const stationIpEl = document.getElementById("stationIp");
+      const remoteConnectedEl = document.getElementById("remoteConnected");
+      const activeChannelEl = document.getElementById("activeChannel");
+      const statusRawEl = document.getElementById("statusRaw");
+      const messageEl = document.getElementById("message");
+      const slotListEl = document.getElementById("slotList");
+      const manualPortionEl = document.getElementById("manualPortion");
+      const schedulePortionEl = document.getElementById("schedulePortion");
+      const debugDirectionEl = document.getElementById("debugDirection");
+      const debugSpeedEl = document.getElementById("debugSpeed");
+      const speedLabelEl = document.getElementById("speedLabel");
+
+      let mqttClient = null;
+      let activeMode = "none";
+      let lastStatus = null;
+
+      function fillPortions() {
+        for (const select of [manualPortionEl, schedulePortionEl]) {
+          select.innerHTML = "";
+          for (let i = 1; i <= 6; i += 1) {
+            const option = document.createElement("option");
+            option.value = String(i);
+            option.textContent = `${i} 份`;
+            select.appendChild(option);
+          }
+        }
+      }
+
+      function loadConfig() {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "null") || {};
+        const config = { ...defaults, ...saved };
+        localBaseUrlEl.value = config.localBaseUrl;
+        brokerUrlEl.value = config.brokerUrl;
+        topicRootEl.value = config.topicRoot;
+        deviceIdEl.value = config.deviceId;
+      }
+
+      function saveConfig() {
+        localStorage.setItem(storageKey, JSON.stringify({
+          localBaseUrl: localBaseUrlEl.value.trim(),
+          brokerUrl: brokerUrlEl.value.trim(),
+          topicRoot: topicRootEl.value.trim(),
+          deviceId: deviceIdEl.value.trim(),
+        }));
+      }
+
+      function topicBase() {
+        return `${topicRootEl.value.trim()}/${deviceIdEl.value.trim()}`;
+      }
+
+      function commandTopic() {
+        return `${topicBase()}/command`;
+      }
+
+      function statusTopic() {
+        return `${topicBase()}/status`;
+      }
+
+      function setMode(text, online = false) {
+        controlModeEl.textContent = text;
+        controlModeEl.className = online ? "pill" : "pill offline";
+      }
+
+      function showMessage(text, isError = false) {
+        messageEl.textContent = text || "";
+        messageEl.style.color = isError ? "#a24444" : "#76695d";
+      }
+
+      function renderSlots(times) {
+        slotListEl.innerHTML = "";
+        const safe = (times && times.length ? times : ["08:00", "18:00"]).slice(0, 6);
+        safe.forEach((time) => addSlot(time));
+      }
+
+      function addSlot(value = "12:00") {
+        if (slotListEl.children.length >= 6) return;
+        const row = document.createElement("div");
+        row.className = "slot-item";
+        row.innerHTML = `
+          <input type="time" value="${value}" />
+          <button class="danger" type="button">删除</button>
+        `;
+        row.querySelector("button").addEventListener("click", () => row.remove());
+        slotListEl.appendChild(row);
+      }
+
+      function collectSlots() {
+        return [...slotListEl.querySelectorAll("input[type='time']")]
+          .map((input) => input.value)
+          .filter(Boolean);
+      }
+
+      function renderSpeedLabel(value) {
+        speedLabelEl.textContent = `速度 ${value}`;
+      }
+
+      function localApi(path) {
+        return `${localBaseUrlEl.value.trim().replace(/\/+$/, "")}${path}`;
+      }
+
+      async function localRequest(path, options) {
+        const response = await fetch(localApi(path), options);
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "本地请求失败");
+        }
+        return data;
+      }
+
+      async function tryLocalStatus() {
+        if (!localBaseUrlEl.value.trim()) {
+          return null;
+        }
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2500);
+        try {
+          const data = await localRequest("/api/status", { signal: controller.signal });
+          clearTimeout(timeout);
+          return data;
+        } catch (error) {
+          clearTimeout(timeout);
+          return null;
+        }
+      }
+
+      function applyStatus(data) {
+        lastStatus = data;
+        nowEl.textContent = data.now || "-";
+        motionEl.textContent = `${data.motionLabel || "-"} / ${data.directionLabel || "-"}`;
+        portionEl.textContent = `${data.defaultPortion || "-"} 份`;
+        stationIpEl.textContent = data.stationIp || "未连接";
+        remoteConnectedEl.textContent = data.remoteConnected ? "已连上" : "未连上";
+        activeChannelEl.textContent = activeMode === "local" ? "本地直连" : activeMode === "remote" ? "外网云桥" : "-";
+        statusRawEl.value = JSON.stringify(data, null, 2);
+
+        if (data.defaultPortion) {
+          manualPortionEl.value = String(data.defaultPortion);
+          schedulePortionEl.value = String(data.defaultPortion);
+        }
+        if (data.debugSpeedLevel) {
+          debugSpeedEl.value = String(data.debugSpeedLevel);
+          renderSpeedLabel(data.debugSpeedLevel);
+        }
+        if (Array.isArray(data.schedule)) {
+          renderSlots(data.schedule.map((item) => item.time));
+        }
+      }
+
+      function ensureMqttConnection() {
+        if (mqttClient && mqttClient.connected) {
+          return;
+        }
+
+        const brokerUrl = brokerUrlEl.value.trim();
+        mqttClient = mqtt.connect(brokerUrl, {
+          clientId: `fitpass-web-${Math.random().toString(16).slice(2, 10)}`,
+          clean: true,
+          connectTimeout: 8000,
+          reconnectPeriod: 3000,
+        });
+
+        mqttClient.on("connect", () => {
+          mqttClient.subscribe(statusTopic(), { qos: 0 });
+          setMode("外网云桥已连上", true);
+          mqttClient.publish(commandTopic(), "action=status");
+        });
+
+        mqttClient.on("close", () => {
+          if (activeMode === "remote") {
+            setMode("云桥已断开", false);
+          }
+        });
+
+        mqttClient.on("error", (error) => {
+          if (activeMode !== "local") {
+            setMode("云桥失败", false);
+            showMessage(error.message || "MQTT 连接失败", true);
+          }
+        });
+
+        mqttClient.on("message", (topic, payload) => {
+          if (topic !== statusTopic()) return;
+          try {
+            const data = JSON.parse(String(payload));
+            activeMode = "remote";
+            setMode("正在走外网云桥", true);
+            applyStatus(data);
+          } catch (error) {
+            showMessage(`远程状态解析失败：${error.message}`, true);
+          }
+        });
+      }
+
+      async function connectUnified() {
+        saveConfig();
+        setMode("连接中", false);
+        showMessage(localBaseUrlEl.value.trim() ? "先尝试本地直连..." : "未填写局域网地址，直接连接外网云桥...");
+
+        const localStatus = await tryLocalStatus();
+        if (localStatus) {
+          activeMode = "local";
+          setMode("正在走本地直连", true);
+          applyStatus(localStatus);
+          showMessage("已连上家里的 ESP32，本地模式优先");
+          return;
+        }
+
+        showMessage(localBaseUrlEl.value.trim() ? "本地直连失败，切换到外网云桥..." : "正在连接外网云桥...");
+        ensureMqttConnection();
+      }
+
+      async function refreshStatus() {
+        if (activeMode === "local") {
+          try {
+            const data = await localRequest("/api/status");
+            applyStatus(data);
+            return;
+          } catch (error) {
+            showMessage("本地直连失效，正在尝试云桥...", true);
+          }
+        }
+
+        activeMode = "remote";
+        ensureMqttConnection();
+        if (mqttClient && mqttClient.connected) {
+          mqttClient.publish(commandTopic(), "action=status");
+        }
+      }
+
+      async function sendLocal(path, form) {
+        const body = new URLSearchParams(form).toString();
+        const data = await localRequest(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body,
+        });
+        applyStatus(data);
+      }
+
+      function sendRemote(payload, message) {
+        ensureMqttConnection();
+        if (!mqttClient || !mqttClient.connected) {
+          showMessage("云桥还没连上", true);
+          return;
+        }
+        mqttClient.publish(commandTopic(), payload, { qos: 0, retain: false });
+        activeMode = "remote";
+        setMode("正在走外网云桥", true);
+        showMessage(message);
+      }
+
+      async function unifiedAction(action) {
+        const speed = debugSpeedEl.value;
+        const direction = debugDirectionEl.value;
+        const slots = collectSlots().join(",");
+        const portion = schedulePortionEl.value;
+        const manualPortion = manualPortionEl.value;
+
+        try {
+          if (activeMode === "local") {
+            if (action === "feed") {
+              await sendLocal("/api/feed", { portion: manualPortion });
+              showMessage("已发送本地投喂");
+              return;
+            }
+            if (action === "debug") {
+              await sendLocal("/api/debug/start", { direction, speed });
+              showMessage(`已发送本地调试，速度 ${speed}`);
+              return;
+            }
+            if (action === "stop") {
+              await sendLocal("/api/debug/stop", {});
+              showMessage("已停止");
+              return;
+            }
+            if (action === "schedule") {
+              await sendLocal("/api/schedule", { slots, portion });
+              showMessage("已保存本地计划");
+              return;
+            }
+          }
+        } catch (error) {
+          showMessage(`本地发送失败，改走云桥：${error.message}`, true);
+        }
+
+        if (action === "feed") {
+          sendRemote(`action=feed&portion=${manualPortion}`, "已发送远程投喂");
+          return;
+        }
+        if (action === "debug") {
+          sendRemote(`action=debug&direction=${direction}&speed=${speed}`, `已发送远程调试，速度 ${speed}`);
+          return;
+        }
+        if (action === "stop") {
+          sendRemote("action=stop", "已发送停止指令");
+          return;
+        }
+        if (action === "schedule") {
+          sendRemote(`action=schedule&slots=${slots}&portion=${portion}`, "已发送远程定时计划");
+        }
+      }
+
+      fillPortions();
+      loadConfig();
+      renderSlots(["08:00", "18:00"]);
+      renderSpeedLabel(debugSpeedEl.value);
+
+      document.getElementById("connectBtn").addEventListener("click", connectUnified);
+      document.getElementById("refreshBtn").addEventListener("click", refreshStatus);
+      document.getElementById("feedBtn").addEventListener("click", () => unifiedAction("feed"));
+      document.getElementById("debugBtn").addEventListener("click", () => unifiedAction("debug"));
+      document.getElementById("stopBtn").addEventListener("click", () => unifiedAction("stop"));
+      document.getElementById("saveScheduleBtn").addEventListener("click", () => unifiedAction("schedule"));
+      document.getElementById("addSlotBtn").addEventListener("click", () => addSlot());
+      debugSpeedEl.addEventListener("input", () => renderSpeedLabel(debugSpeedEl.value));
+
+      connectUnified();
+    </script>
+  </body>
+</html>
