@@ -525,13 +525,21 @@
           return;
         }
 
-        accessPin = pin;
-        localStorage.setItem(pinStorageKey, pin);
-        lockScreenEl.classList.add("hidden");
-        setUnlockMessage("");
-
         try {
-          await refresh();
+          const response = await fetch("/api/unlock", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: new URLSearchParams({ pin }).toString(),
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "invalid pin");
+          }
+          accessPin = pin;
+          localStorage.setItem(pinStorageKey, pin);
+          lockScreenEl.classList.add("hidden");
+          setUnlockMessage("");
+          applyStatus(data);
           showMessage("控制窗口已连接");
         } catch (error) {
           showMessage(error.message, true);
@@ -539,6 +547,7 @@
             lockScreenEl.classList.remove("hidden");
             setUnlockMessage("控制码不对，再试一次", true);
           }
+          return;
         }
 
         startRefreshLoop();

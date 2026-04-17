@@ -109,6 +109,10 @@ String remoteAvailabilityTopic() {
   return remoteTopicBase() + "/availability";
 }
 
+String remoteAuthTopic() {
+  return remoteTopicBase() + "/auth";
+}
+
 String remoteClientId() {
   uint64_t chipId = ESP.getEfuseMac();
   char buffer[40];
@@ -481,6 +485,14 @@ void handleStatus() {
   sendJson(200, statusJson());
 }
 
+void handleUnlock() {
+  if (!ensureLocalAuthorized()) {
+    return;
+  }
+
+  sendJson(200, statusJson());
+}
+
 void handleIndex() {
   File file = LittleFS.open("/index.html", "r");
   if (!file) {
@@ -583,7 +595,27 @@ void handleRemoteCommand(const String &payload) {
 
   Serial.printf("[REMOTE] action=%s payload=%s\n", action.c_str(), payload.c_str());
 
-  if (action != "status" && !isAuthorizedPin(extractCommandValue(payload, "pin"))) {
+  const String pin = extractCommandValue(payload, "pin");
+  const String nonce = extractCommandValue(payload, "nonce");
+
+  if (action == "auth") {
+    const bool ok = isAuthorizedPin(pin);
+    if (mqttClient.connected()) {
+      const String body =
+          String("{\"ok\":") + (ok ? "true" : "false") +
+          ",\"nonce\":\"" + jsonEscape(nonce) + "\"" +
+          ",\"message\":\"" + jsonEscape(ok ? String("ok") : String("invalid pin")) + "\"}";
+      mqttClient.publish(remoteAuthTopic().c_str(), body.c_str(), false);
+    }
+    if (ok) {
+      publishRemoteStatus(true);
+    } else {
+      Serial.println("[REMOTE] auth rejected because pin is invalid");
+    }
+    return;
+  }
+
+  if (action != "status" && !isAuthorizedPin(pin)) {
     Serial.printf("[REMOTE] rejected action=%s because pin is invalid\n", action.c_str());
     return;
   }
@@ -777,6 +809,7 @@ void setupRoutes() {
   });
   server.on("/", HTTP_GET, handleIndex);
   server.on("/api/status", HTTP_GET, handleStatus);
+  server.on("/api/unlock", HTTP_POST, handleUnlock);
   server.on("/api/feed", HTTP_POST, handleManualFeed);
   server.on("/api/debug/start", HTTP_POST, handleDebugStart);
   server.on("/api/debug/stop", HTTP_POST, handleStop);

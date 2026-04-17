@@ -438,6 +438,7 @@
       let activeMode = "none";
       let lastStatus = null;
       let accessPin = "";
+      let pendingAuthResolver = null;
 
       function fillPortions() {
         for (const select of [manualPortionEl, schedulePortionEl]) {
@@ -479,6 +480,10 @@
 
       function statusTopic() {
         return `${topicBase()}/status`;
+      }
+
+      function authTopic() {
+        return `${topicBase()}/auth`;
       }
 
       function setMode(text, online = false) {
@@ -604,8 +609,11 @@
 
         mqttClient.on("connect", () => {
           mqttClient.subscribe(statusTopic(), { qos: 0 });
+          mqttClient.subscribe(authTopic(), { qos: 0 });
           setMode("外网云桥已连上", true);
-          mqttClient.publish(commandTopic(), withPinPayload("action=status"));
+          if (ensureUnlocked()) {
+            mqttClient.publish(commandTopic(), withPinPayload("action=status"));
+          }
         });
 
         mqttClient.on("close", () => {
@@ -622,15 +630,70 @@
         });
 
         mqttClient.on("message", (topic, payload) => {
-          if (topic !== statusTopic()) return;
-          try {
-            const data = JSON.parse(String(payload));
-            activeMode = "remote";
-            setMode("正在走外网云桥", true);
-            applyStatus(data);
-          } catch (error) {
-            showMessage(`远程状态解析失败：${error.message}`, true);
+          if (topic === authTopic()) {
+            try {
+              const data = JSON.parse(String(payload));
+              if (pendingAuthResolver) {
+                pendingAuthResolver(data);
+                pendingAuthResolver = null;
+              }
+            } catch (error) {
+              showUnlockMessage(`验码响应解析失败：${error.message}`, true);
+            }
+            return;
           }
+
+          if (topic === statusTopic()) {
+            try {
+              const data = JSON.parse(String(payload));
+              activeMode = "remote";
+              setMode("正在走外网云桥", true);
+              applyStatus(data);
+            } catch (error) {
+              showMessage(`远程状态解析失败：${error.message}`, true);
+            }
+          }
+        });
+      }
+
+      function verifyRemotePin(pin) {
+        return new Promise((resolve, reject) => {
+          ensureMqttConnection();
+          if (!mqttClient) {
+            reject(new Error("云桥还没初始化"));
+            return;
+          }
+
+          const nonce = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+          const timeout = setTimeout(() => {
+            if (pendingAuthResolver) {
+              pendingAuthResolver = null;
+            }
+            reject(new Error("控制码校验超时"));
+          }, 4000);
+
+          pendingAuthResolver = (result) => {
+            if (result.nonce !== nonce) {
+              return;
+            }
+            clearTimeout(timeout);
+            if (result.ok) {
+              resolve(result);
+              return;
+            }
+            reject(new Error(result.message || "invalid pin"));
+          };
+
+          const publishAuth = () => {
+            mqttClient.publish(commandTopic(), `action=auth&pin=${pin}&nonce=${nonce}`, { qos: 0, retain: false });
+          };
+
+          if (mqttClient.connected) {
+            publishAuth();
+            return;
+          }
+
+          mqttClient.once("connect", publishAuth);
         });
       }
 
@@ -755,17 +818,37 @@
         }
       }
 
-      function unlockWithPin() {
+      async function unlockWithPin() {
         const pin = pinInputEl.value.trim();
         if (!/^\d{4}$/.test(pin)) {
           showUnlockMessage("请输入 4 位数字控制码", true);
           return;
         }
-        accessPin = pin;
-        localStorage.setItem(pinStorageKey, pin);
-        lockScreenEl.classList.add("hidden");
-        showUnlockMessage("");
-        connectUnified();
+
+        try {
+          if (localBaseUrlEl.value.trim()) {
+            const response = await fetch(localApi("/api/unlock"), {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+              body: new URLSearchParams({ pin }).toString(),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.error || "invalid pin");
+            }
+          } else {
+            await verifyRemotePin(pin);
+          }
+
+          accessPin = pin;
+          localStorage.setItem(pinStorageKey, pin);
+          lockScreenEl.classList.add("hidden");
+          showUnlockMessage("");
+          connectUnified();
+        } catch (error) {
+          lockScreenEl.classList.remove("hidden");
+          showUnlockMessage(error.message === "invalid pin" ? "控制码不对，再试一次" : error.message, true);
+        }
       }
 
       fillPortions();
