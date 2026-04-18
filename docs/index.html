@@ -659,6 +659,9 @@
       const storageKey = "fitpass-unified-control-v1";
       const pinStorageKey = "fitpass-public-access-pin";
       const quickAccessPin = "0728";
+      const localActionTimeoutMs = 900;
+      const localStatusTimeoutMs = 1200;
+      const remoteHeartbeatIntervalMs = 15000;
       const defaults = {
         localBaseUrl: "",
         brokerUrl: "wss://broker.emqx.io:8084/mqtt",
@@ -695,6 +698,8 @@
       let lastStatus = null;
       let accessPin = "";
       let pendingAuthResolver = null;
+      let pendingRemoteCommand = null;
+      let remoteHeartbeatTimer = null;
 
       function fillPortions() {
         for (const select of [manualPortionEl, schedulePortionEl]) {
@@ -802,8 +807,27 @@
         return `${localBaseUrlEl.value.trim().replace(/\/+$/, "")}${path}`;
       }
 
-      async function localRequest(path, options) {
-        const response = await fetch(localApi(path), options);
+      async function localRequest(path, options = {}) {
+        const timeoutMs = options.timeoutMs ?? localActionTimeoutMs;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        const fetchOptions = {
+          ...options,
+          signal: controller.signal,
+        };
+        delete fetchOptions.timeoutMs;
+
+        let response;
+        try {
+          response = await fetch(localApi(path), fetchOptions);
+        } catch (error) {
+          clearTimeout(timeout);
+          if (error.name === "AbortError") {
+            throw new Error("本地直连超时");
+          }
+          throw error;
+        }
+        clearTimeout(timeout);
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error || "本地请求失败");
@@ -815,14 +839,10 @@
         if (!localBaseUrlEl.value.trim()) {
           return null;
         }
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2500);
         try {
-          const data = await localRequest("/api/status", { signal: controller.signal });
-          clearTimeout(timeout);
+          const data = await localRequest("/api/status", { timeoutMs: localStatusTimeoutMs });
           return data;
         } catch (error) {
-          clearTimeout(timeout);
           return null;
         }
       }
@@ -852,35 +872,78 @@
         }
       }
 
+      function clearRemoteHeartbeat() {
+        if (!remoteHeartbeatTimer) {
+          return;
+        }
+        clearInterval(remoteHeartbeatTimer);
+        remoteHeartbeatTimer = null;
+      }
+
+      function startRemoteHeartbeat() {
+        clearRemoteHeartbeat();
+        remoteHeartbeatTimer = setInterval(() => {
+          if (!mqttClient || !mqttClient.connected || !ensureUnlocked()) {
+            return;
+          }
+          mqttClient.publish(commandTopic(), withPinPayload("action=status"), { qos: 0, retain: false });
+        }, remoteHeartbeatIntervalMs);
+      }
+
+      function flushPendingRemoteCommand() {
+        if (!mqttClient || !mqttClient.connected || !pendingRemoteCommand) {
+          return;
+        }
+        const { payload, message } = pendingRemoteCommand;
+        pendingRemoteCommand = null;
+        mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 0, retain: false });
+        activeMode = "remote";
+        setMode("正在走外网云桥", true);
+        showMessage(message);
+      }
+
       function ensureMqttConnection() {
         if (mqttClient && mqttClient.connected) {
           return;
+        }
+
+        if (mqttClient) {
+          try {
+            mqttClient.end(true);
+          } catch (error) {
+            console.warn("结束旧 MQTT 连接失败", error);
+          }
         }
 
         const brokerUrl = brokerUrlEl.value.trim();
         mqttClient = mqtt.connect(brokerUrl, {
           clientId: `fitpass-web-${Math.random().toString(16).slice(2, 10)}`,
           clean: true,
-          connectTimeout: 8000,
-          reconnectPeriod: 3000,
+          connectTimeout: 5000,
+          reconnectPeriod: 1200,
+          keepalive: 20,
         });
 
         mqttClient.on("connect", () => {
           mqttClient.subscribe(statusTopic(), { qos: 0 });
           mqttClient.subscribe(authTopic(), { qos: 0 });
           setMode("外网云桥已连上", true);
+          startRemoteHeartbeat();
           if (ensureUnlocked()) {
             mqttClient.publish(commandTopic(), withPinPayload("action=status"));
           }
+          flushPendingRemoteCommand();
         });
 
         mqttClient.on("close", () => {
+          clearRemoteHeartbeat();
           if (activeMode === "remote") {
             setMode("云桥已断开", false);
           }
         });
 
         mqttClient.on("error", (error) => {
+          clearRemoteHeartbeat();
           if (activeMode !== "local") {
             setMode("云桥失败", false);
             showMessage(error.message || "MQTT 连接失败", true);
@@ -1024,8 +1087,13 @@
           return;
         }
         ensureMqttConnection();
-        if (!mqttClient || !mqttClient.connected) {
-          showMessage("云桥还没连上", true);
+        if (!mqttClient) {
+          showMessage("云桥初始化失败", true);
+          return;
+        }
+        if (!mqttClient.connected) {
+          pendingRemoteCommand = { payload, message };
+          showMessage("云桥重连中，命令会自动补发...");
           return;
         }
         mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 0, retain: false });
@@ -1151,6 +1219,13 @@
         pinInputEl.value = rememberedPin;
         unlockWithPin();
       }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && ensureUnlocked()) {
+          ensureMqttConnection();
+          refreshStatus();
+        }
+      });
     </script>
   </body>
 </html>
