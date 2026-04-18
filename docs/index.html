@@ -8,50 +8,113 @@
       :root {
         color-scheme: light;
         --bg: #f5efe6;
-        --card: rgba(255, 252, 247, 0.93);
-        --text: #292420;
-        --muted: #76695d;
-        --line: rgba(58, 45, 34, 0.12);
-        --accent: #dc6f43;
-        --accent-strong: #be5328;
+        --card: rgba(255, 252, 247, 0.9);
+        --card-strong: rgba(255, 253, 249, 0.98);
+        --text: #231d19;
+        --muted: #766a5f;
+        --muted-2: #9d9084;
+        --line: rgba(58, 45, 34, 0.1);
+        --line-strong: rgba(58, 45, 34, 0.18);
+        --accent: #e07146;
+        --accent-strong: #bf5226;
+        --accent-soft: rgba(224, 113, 70, 0.12);
         --danger: #a24444;
-        --ok: #4c7a60;
-        --shadow: 0 24px 72px rgba(63, 41, 22, 0.14);
+        --ok: #3f7558;
+        --ok-soft: rgba(63, 117, 88, 0.14);
+        --shadow-sm: 0 4px 14px rgba(63, 41, 22, 0.06);
+        --shadow: 0 18px 48px rgba(63, 41, 22, 0.12);
+        --shadow-lg: 0 30px 90px rgba(20, 12, 8, 0.18);
       }
 
       * { box-sizing: border-box; }
+
+      html, body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: "SF Pro SC", "PingFang SC", "Noto Sans SC", sans-serif;
+        font-family: "SF Pro SC", "PingFang SC", "Noto Sans SC", "Inter", system-ui, sans-serif;
         color: var(--text);
         background:
-          radial-gradient(circle at top right, rgba(220, 111, 67, 0.17), transparent 28%),
-          radial-gradient(circle at bottom left, rgba(80, 130, 102, 0.15), transparent 24%),
-          linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+          radial-gradient(circle at 85% -5%, rgba(224, 113, 70, 0.22), transparent 35%),
+          radial-gradient(circle at -5% 90%, rgba(63, 117, 88, 0.18), transparent 32%),
+          linear-gradient(180deg, #fcf8f2 0%, var(--bg) 100%);
       }
 
       .wrap {
         width: min(1040px, calc(100vw - 28px));
         margin: 0 auto;
-        padding: 24px 0 48px;
+        padding: 18px 0 56px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        background: var(--card-strong);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        box-shadow: var(--shadow-sm);
+        backdrop-filter: blur(14px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .brand-mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        color: #fff;
+        font-weight: 800;
+        font-size: 17px;
+        letter-spacing: -0.02em;
+        box-shadow: 0 6px 16px rgba(224, 113, 70, 0.35);
+      }
+
+      .brand-name {
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: -0.01em;
+      }
+
+      .brand-sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 1px;
       }
 
       .hero {
-        padding: 8px 4px 18px;
+        padding: 4px 2px 22px;
       }
 
       h1 {
-        margin: 0 0 10px;
-        font-size: clamp(30px, 8vw, 48px);
-        letter-spacing: -0.04em;
+        margin: 0 0 8px;
+        font-size: clamp(28px, 7.4vw, 40px);
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        line-height: 1.1;
       }
 
       .hero p {
         margin: 0;
         color: var(--muted);
-        font-size: 15px;
+        font-size: 14.5px;
         line-height: 1.65;
+        max-width: 640px;
       }
 
       .grid {
@@ -68,20 +131,22 @@
       .card {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 24px;
-        padding: 18px;
+        border-radius: 22px;
+        padding: 22px;
         box-shadow: var(--shadow);
-        backdrop-filter: blur(12px);
+        backdrop-filter: blur(14px);
       }
 
       .card h2 {
-        margin: 0 0 14px;
-        font-size: 18px;
+        margin: 0 0 16px;
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
 
       .stack {
         display: grid;
-        gap: 12px;
+        gap: 14px;
       }
 
       .row {
@@ -93,15 +158,17 @@
 
       .row > * { flex: 1 1 0; }
       .row > button,
-      .row > .pill {
+      .row > .pill,
+      .row > .icon-btn {
         flex: 0 0 auto;
       }
 
       label {
         display: grid;
         gap: 6px;
-        font-size: 13px;
+        font-size: 12.5px;
         color: var(--muted);
+        font-weight: 500;
       }
 
       input,
@@ -109,80 +176,168 @@
       button,
       textarea {
         width: 100%;
-        border-radius: 16px;
+        border-radius: 14px;
         border: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.92);
+        background: rgba(255, 255, 255, 0.95);
         color: var(--text);
-        padding: 13px 14px;
+        padding: 12px 14px;
         font: inherit;
+        transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
       }
 
       textarea {
         min-height: 110px;
         resize: vertical;
+        font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+        font-size: 12.5px;
+        color: var(--muted);
       }
 
       button {
         cursor: pointer;
         font-weight: 700;
-        transition: transform 120ms ease, background 120ms ease;
+        letter-spacing: 0.01em;
+        transition: transform 120ms ease, background 150ms ease, box-shadow 150ms ease;
       }
 
-      button:hover { transform: translateY(-1px); }
+      button:hover:not(:disabled) { transform: translateY(-1px); }
+      button:active:not(:disabled) { transform: translateY(0); }
+      button:disabled { cursor: not-allowed; opacity: 0.55; }
 
       .primary {
         background: linear-gradient(135deg, var(--accent), var(--accent-strong));
         color: #fff;
         border-color: transparent;
+        box-shadow: 0 8px 20px rgba(191, 82, 38, 0.28);
+      }
+      .primary:hover:not(:disabled) {
+        box-shadow: 0 12px 24px rgba(191, 82, 38, 0.34);
       }
 
       .ghost {
-        background: rgba(255,255,255,0.55);
+        background: rgba(255, 255, 255, 0.55);
+      }
+      .ghost:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.85);
       }
 
       .danger {
         background: rgba(162, 68, 68, 0.12);
         color: var(--danger);
+        border-color: transparent;
+      }
+      .danger:hover:not(:disabled) {
+        background: rgba(162, 68, 68, 0.2);
+      }
+
+      .icon-btn {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+        font-weight: 500;
+        line-height: 1;
+        background: rgba(162, 68, 68, 0.1);
+        color: var(--danger);
+        border-color: transparent;
+      }
+      .icon-btn:hover:not(:disabled) {
+        background: rgba(162, 68, 68, 0.18);
       }
 
       .pill {
-        padding: 8px 12px;
+        padding: 6px 12px;
         border-radius: 999px;
-        background: rgba(76, 122, 96, 0.12);
+        background: var(--ok-soft);
         color: var(--ok);
         font-size: 12px;
         font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        white-space: nowrap;
+      }
+
+      .pill::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--ok);
+        box-shadow: 0 0 0 0 rgba(63, 117, 88, 0.5);
+        animation: pulse 2s ease-out infinite;
       }
 
       .pill.offline {
-        background: rgba(162, 68, 68, 0.12);
+        background: rgba(162, 68, 68, 0.1);
         color: var(--danger);
+      }
+      .pill.offline::before {
+        background: var(--danger);
+        animation: none;
+      }
+
+      .pill.neutral {
+        background: rgba(118, 106, 95, 0.12);
+        color: var(--muted);
+      }
+      .pill.neutral::before {
+        background: var(--muted-2);
+        animation: none;
+      }
+
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(63, 117, 88, 0.45); }
+        70% { box-shadow: 0 0 0 8px rgba(63, 117, 88, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(63, 117, 88, 0); }
       }
 
       .meta {
         display: grid;
         gap: 10px;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       }
 
       .meta-item {
-        border-radius: 18px;
-        padding: 14px;
-        background: rgba(255,255,255,0.68);
+        border-radius: 16px;
+        padding: 14px 15px;
+        background: rgba(255, 255, 255, 0.7);
         border: 1px solid var(--line);
+        transition: background 150ms ease;
       }
 
       .meta-item .label {
         display: block;
-        font-size: 12px;
+        font-size: 11.5px;
         color: var(--muted);
-        margin-bottom: 6px;
+        margin-bottom: 5px;
+        letter-spacing: 0.02em;
       }
 
       .meta-item .value {
         font-size: 15px;
         font-weight: 700;
         word-break: break-word;
+        letter-spacing: -0.01em;
+      }
+
+      .meta-item.running {
+        background: linear-gradient(135deg, rgba(224, 113, 70, 0.1), rgba(224, 113, 70, 0.04));
+        border-color: rgba(224, 113, 70, 0.3);
+      }
+      .meta-item.running .value {
+        color: var(--accent-strong);
       }
 
       .slot-list {
@@ -193,15 +348,32 @@
       .slot-item {
         display: flex;
         gap: 10px;
+        align-items: center;
       }
 
       .slot-item input { flex: 1 1 auto; }
-      .slot-item button { flex: 0 0 auto; width: auto; }
+      .slot-item .icon-btn { flex: 0 0 auto; width: 40px; }
+
+      .empty-slots {
+        padding: 18px 14px;
+        border-radius: 14px;
+        border: 1px dashed var(--line-strong);
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
 
       .message {
         min-height: 20px;
         color: var(--muted);
         font-size: 13px;
+      }
+
+      .message.ok {
+        color: var(--ok);
+      }
+      .message.err {
+        color: var(--danger);
       }
 
       .fine {
@@ -210,6 +382,56 @@
         line-height: 1.65;
       }
 
+      .hint {
+        display: block;
+        color: var(--muted-2);
+        font-size: 11.5px;
+        margin-top: 2px;
+        font-weight: 500;
+      }
+
+      details.advanced {
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid var(--line);
+        padding: 0;
+        overflow: hidden;
+      }
+
+      details.advanced summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 12px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        user-select: none;
+      }
+      details.advanced summary::-webkit-details-marker { display: none; }
+      details.advanced summary::after {
+        content: "+";
+        font-size: 16px;
+        color: var(--muted-2);
+        transition: transform 200ms ease;
+      }
+      details.advanced[open] summary::after {
+        transform: rotate(45deg);
+      }
+      details.advanced .stack {
+        padding: 4px 14px 14px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 14px;
+      }
+      .section-head h2 { margin: 0; flex: 1 1 auto; }
+
       .lock-screen {
         position: fixed;
         inset: 0;
@@ -217,8 +439,8 @@
         display: grid;
         place-items: center;
         padding: 20px;
-        background: rgba(33, 25, 19, 0.4);
-        backdrop-filter: blur(14px);
+        background: radial-gradient(circle at 30% 20%, rgba(224, 113, 70, 0.28), rgba(33, 25, 19, 0.55) 60%);
+        backdrop-filter: blur(18px);
       }
 
       .lock-screen.hidden {
@@ -229,21 +451,36 @@
         width: min(100%, 400px);
         background: rgba(255, 250, 243, 0.97);
         border: 1px solid var(--line);
-        border-radius: 28px;
-        padding: 24px;
-        box-shadow: 0 30px 90px rgba(20, 12, 8, 0.2);
+        border-radius: 26px;
+        padding: 28px 26px 24px;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .lock-mark {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        font-size: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 10px 26px rgba(191, 82, 38, 0.35);
       }
 
       .lock-card h2 {
-        margin: 0 0 10px;
-        font-size: 24px;
+        margin: 0 0 8px;
+        font-size: 22px;
+        letter-spacing: -0.02em;
       }
 
       .lock-card p {
-        margin: 0 0 14px;
+        margin: 0 0 18px;
         color: var(--muted);
         line-height: 1.6;
-        font-size: 14px;
+        font-size: 13.5px;
       }
 
       .pin-input {
@@ -257,6 +494,7 @@
   <body>
     <section id="lockScreen" class="lock-screen">
       <div class="lock-card">
+        <div class="lock-mark">F</div>
         <h2>输入控制码</h2>
         <p>这张公网控制页现在需要 4 位数字控制码。输对以后才能真正发送投喂、调试、停止和计划指令。</p>
         <div class="stack">
@@ -268,40 +506,53 @@
     </section>
 
     <div class="wrap">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">F</div>
+          <div>
+            <div class="brand-name">FitPass Control</div>
+            <div class="brand-sub">自动喂食器远程控制台</div>
+          </div>
+        </div>
+        <span id="controlMode" class="pill offline">未连接</span>
+      </header>
+
       <section class="hero">
-        <h1>FitPass Control</h1>
+        <h1>随时随地，喂一份。</h1>
         <p>这一张页面默认直接走外网云桥，所以不在家也能控制；如果你以后想在家里优先走局域网，可以手动填上家里的 ESP32 地址。</p>
       </section>
 
       <div class="grid two">
         <section class="card stack">
-          <div class="row">
-            <h2 style="margin:0; flex:1 1 auto">统一连接设置</h2>
-            <span id="controlMode" class="pill offline">未连接</span>
+          <div class="section-head">
+            <h2>连接设置</h2>
           </div>
 
           <label>
             家里局域网地址
             <input id="localBaseUrl" placeholder="例如：http://192.168.1.181" />
+            <span class="hint">留空时直接走外网云桥</span>
           </label>
 
-          <div class="row">
-            <label>
-              MQTT WebSocket 地址
-              <input id="brokerUrl" value="wss://broker.emqx.io:8084/mqtt" />
-            </label>
-          </div>
-
-          <div class="row">
-            <label>
-              Topic Root
-              <input id="topicRoot" value="fitpass-268d55c3348537845960bb9b" />
-            </label>
-            <label>
-              设备 ID
-              <input id="deviceId" value="fitpass-52fe04f8aa9d7bf440c7fad3" />
-            </label>
-          </div>
+          <details class="advanced">
+            <summary>高级：MQTT 云桥参数</summary>
+            <div class="stack">
+              <label>
+                MQTT WebSocket 地址
+                <input id="brokerUrl" value="wss://broker.emqx.io:8084/mqtt" />
+              </label>
+              <div class="row">
+                <label>
+                  Topic Root
+                  <input id="topicRoot" value="fitpass-268d55c3348537845960bb9b" />
+                </label>
+                <label>
+                  设备 ID
+                  <input id="deviceId" value="fitpass-52fe04f8aa9d7bf440c7fad3" />
+                </label>
+              </div>
+            </div>
+          </details>
 
           <div class="row">
             <button id="connectBtn" class="primary">开始连接</button>
@@ -309,9 +560,7 @@
           </div>
 
           <div class="fine">
-            连接逻辑：
-            1. 如果填了家里局域网地址，先试本地直连；
-            2. 如果没填，或当前不在家不可达，再自动切到 MQTT 云桥。
+            连接逻辑：1. 填了局域网地址就先试本地直连；2. 没填或本地不可达，自动切到 MQTT 云桥。
           </div>
         </section>
 
@@ -353,6 +602,7 @@
             <label>
               投喂份量
               <select id="manualPortion"></select>
+              <span class="hint">1 份 ≈ 120° 电机转动</span>
             </label>
             <button id="feedBtn" class="primary">投喂</button>
           </div>
@@ -369,7 +619,7 @@
               调试速度
               <input id="debugSpeed" type="range" min="1" max="10" step="1" value="6" />
             </label>
-            <div id="speedLabel" class="pill">速度 6</div>
+            <div id="speedLabel" class="pill neutral">速度 6</div>
           </div>
 
           <div class="row">
@@ -393,9 +643,14 @@
       </div>
 
       <section class="card stack" style="margin-top:16px;">
-        <h2>消息与状态 JSON</h2>
+        <h2>消息</h2>
         <div id="message" class="message"></div>
-        <textarea id="statusRaw" readonly placeholder="状态 JSON 会显示在这里"></textarea>
+        <details class="advanced">
+          <summary>原始状态 JSON</summary>
+          <div class="stack">
+            <textarea id="statusRaw" readonly placeholder="状态 JSON 会显示在这里"></textarea>
+          </div>
+        </details>
       </section>
     </div>
 
@@ -513,7 +768,7 @@
         row.className = "slot-item";
         row.innerHTML = `
           <input type="time" value="${value}" />
-          <button class="danger" type="button">删除</button>
+          <button class="icon-btn" type="button" aria-label="删除时间" title="删除">×</button>
         `;
         row.querySelector("button").addEventListener("click", () => row.remove());
         slotListEl.appendChild(row);
@@ -575,6 +830,8 @@
         lastStatus = data;
         nowEl.textContent = data.now || "-";
         motionEl.textContent = `${data.motionLabel || "-"} / ${data.directionLabel || "-"}`;
+        const motionCard = motionEl.closest(".meta-item");
+        if (motionCard) motionCard.classList.toggle("running", !!data.motorRunning);
         portionEl.textContent = `${data.defaultPortion || "-"} 份`;
         stationIpEl.textContent = data.stationIp || "未连接";
         remoteConnectedEl.textContent = data.remoteConnected ? "已连上" : "未连上";
