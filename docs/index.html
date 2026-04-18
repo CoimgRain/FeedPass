@@ -670,7 +670,7 @@
               pendingAuthResolver = null;
             }
             reject(new Error("控制码校验超时，网络不稳或 ESP32 离线"));
-          }, 10000);
+          }, 15000);
 
           pendingAuthResolver = (result) => {
             if (result.nonce !== nonce) {
@@ -837,8 +837,10 @@
           return;
         }
 
+        unlockBtnEl.disabled = true;
         try {
           if (localBaseUrlEl.value.trim()) {
+            showUnlockMessage("正在走本地直连校验...");
             const response = await fetch(localApi("/api/unlock"), {
               method: "POST",
               headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -849,6 +851,9 @@
               throw new Error(data.error || "invalid pin");
             }
           } else {
+            showUnlockMessage(mqttClient && mqttClient.connected
+              ? "正在走外网云桥校验..."
+              : "首次连接云桥较慢，请稍候...");
             await verifyRemotePin(pin);
           }
 
@@ -860,6 +865,8 @@
         } catch (error) {
           lockScreenEl.classList.remove("hidden");
           showUnlockMessage(error.message === "invalid pin" ? "控制码不对，再试一次" : error.message, true);
+        } finally {
+          unlockBtnEl.disabled = false;
         }
       }
 
@@ -867,6 +874,12 @@
       loadConfig();
       renderSlots(["08:00", "18:00"]);
       renderSpeedLabel(debugSpeedEl.value);
+
+      try {
+        ensureMqttConnection();
+      } catch (error) {
+        console.warn("MQTT 预热失败", error);
+      }
 
       document.getElementById("connectBtn").addEventListener("click", connectUnified);
       document.getElementById("refreshBtn").addEventListener("click", refreshStatus);
