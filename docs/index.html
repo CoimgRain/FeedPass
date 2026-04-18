@@ -870,6 +870,11 @@
         if (Array.isArray(data.schedule)) {
           renderSlots(data.schedule.map((item) => item.time));
         }
+
+        if (!localBaseUrlEl.value.trim() && data.stationIp) {
+          localBaseUrlEl.value = `http://${data.stationIp}`;
+          saveConfig();
+        }
       }
 
       function clearRemoteHeartbeat() {
@@ -1055,9 +1060,11 @@
         if (!ensureUnlocked()) {
           return;
         }
-        if (activeMode === "local") {
+        if (localBaseUrlEl.value.trim()) {
           try {
             const data = await localRequest("/api/status");
+            activeMode = "local";
+            setMode("正在走本地直连", true);
             applyStatus(data);
             return;
           } catch (error) {
@@ -1113,24 +1120,32 @@
         const manualPortion = manualPortionEl.value;
 
         try {
-          if (activeMode === "local") {
+          if (localBaseUrlEl.value.trim()) {
             if (action === "feed") {
               await sendLocal("/api/feed", { portion: manualPortion });
+              activeMode = "local";
+              setMode("正在走本地直连", true);
               showMessage("已发送本地投喂");
               return;
             }
             if (action === "debug") {
               await sendLocal("/api/debug/start", { direction, speed });
+              activeMode = "local";
+              setMode("正在走本地直连", true);
               showMessage(`已发送本地调试，速度 ${speed}`);
               return;
             }
             if (action === "stop") {
               await sendLocal("/api/debug/stop", {});
+              activeMode = "local";
+              setMode("正在走本地直连", true);
               showMessage("已停止");
               return;
             }
             if (action === "schedule") {
               await sendLocal("/api/schedule", { slots, portion });
+              activeMode = "local";
+              setMode("正在走本地直连", true);
               showMessage("已保存本地计划");
               return;
             }
