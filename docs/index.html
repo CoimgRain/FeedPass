@@ -669,8 +669,8 @@
             if (pendingAuthResolver) {
               pendingAuthResolver = null;
             }
-            reject(new Error("控制码校验超时"));
-          }, 4000);
+            reject(new Error("控制码校验超时，网络不稳或 ESP32 离线"));
+          }, 10000);
 
           pendingAuthResolver = (result) => {
             if (result.nonce !== nonce) {
@@ -685,7 +685,19 @@
           };
 
           const publishAuth = () => {
-            mqttClient.publish(commandTopic(), `action=auth&pin=${pin}&nonce=${nonce}`, { qos: 0, retain: false });
+            mqttClient.subscribe(authTopic(), { qos: 0 }, (err) => {
+              if (err) {
+                clearTimeout(timeout);
+                pendingAuthResolver = null;
+                reject(new Error(`订阅鉴权主题失败：${err.message || err}`));
+                return;
+              }
+              mqttClient.publish(
+                commandTopic(),
+                `action=auth&pin=${pin}&nonce=${nonce}`,
+                { qos: 0, retain: false }
+              );
+            });
           };
 
           if (mqttClient.connected) {
