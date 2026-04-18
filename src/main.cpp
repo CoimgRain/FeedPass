@@ -7,6 +7,8 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoOTA.h>
 #include <Update.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 #include <time.h>
 
 #include "app_config.h"
@@ -48,6 +50,18 @@ uint32_t currentStepIntervalUs = STEPPER_STEP_INTERVAL_US;
 uint8_t currentSequenceIndex = 0;
 uint8_t debugSpeedLevel = DEBUG_SPEED_LEVEL_DEFAULT;
 bool remoteBrokerConnected = false;
+bool commandIndicatorActive = false;
+unsigned long commandIndicatorUntilAt = 0;
+
+// LCD 1602 + PCF8574 I2C 转接板
+constexpr uint8_t LCD_SDA_PIN = 21;
+constexpr uint8_t LCD_SCL_PIN = 22;
+constexpr uint8_t LCD_COLS = 16;
+constexpr uint8_t LCD_ROWS = 2;
+LiquidCrystal_I2C lcd(0x27, LCD_COLS, LCD_ROWS);
+bool lcdPresent = false;
+unsigned long lastLcdUpdateAt = 0;
+constexpr unsigned long LCD_UPDATE_INTERVAL_MS = 1000;
 
 constexpr uint8_t kStepperPins[4] = {
     STEPPER_IN1_PIN,
@@ -221,6 +235,31 @@ void releaseStepper() {
   for (uint8_t pin : kStepperPins) {
     digitalWrite(pin, LOW);
   }
+}
+
+void setCommandIndicator(bool on) {
+  digitalWrite(COMMAND_INDICATOR_LED_PIN,
+               on ? COMMAND_INDICATOR_LED_ACTIVE_LEVEL : !COMMAND_INDICATOR_LED_ACTIVE_LEVEL);
+}
+
+void pulseCommandIndicator() {
+  commandIndicatorActive = true;
+  commandIndicatorUntilAt = millis() + COMMAND_INDICATOR_PULSE_MS;
+  setCommandIndicator(true);
+  Serial.printf("[INDICATOR] pulse for %ums\n", COMMAND_INDICATOR_PULSE_MS);
+}
+
+void updateCommandIndicator() {
+  if (!commandIndicatorActive) {
+    return;
+  }
+
+  if (static_cast<long>(millis() - commandIndicatorUntilAt) < 0) {
+    return;
+  }
+
+  commandIndicatorActive = false;
+  setCommandIndicator(false);
 }
 
 String slotToString(const FeedSlot &slot) {
@@ -530,6 +569,7 @@ void handleManualFeed() {
     return;
   }
 
+  pulseCommandIndicator();
   sendJson(200, statusJson());
 }
 
@@ -552,6 +592,7 @@ void handleDebugStart() {
     return;
   }
 
+  pulseCommandIndicator();
   sendJson(200, statusJson());
 }
 
@@ -561,6 +602,7 @@ void handleStop() {
   }
 
   stopMotion("user-stop");
+  pulseCommandIndicator();
   sendJson(200, statusJson());
 }
 
@@ -585,6 +627,7 @@ void handleScheduleSave() {
   defaultPortionSteps = static_cast<uint8_t>(portion);
   saveSchedule();
   publishRemoteStatus(true);
+  pulseCommandIndicator();
   sendJson(200, statusJson());
 }
 
@@ -623,17 +666,21 @@ void handleRemoteCommand(const String &payload) {
   }
 
   if (action == "feed") {
+    pulseCommandIndicator();
     const int portion = extractCommandValue(payload, "portion").toInt();
     const uint8_t resolvedPortion = static_cast<uint8_t>(constrain(portion > 0 ? portion : defaultPortionSteps,
                                                                    1,
                                                                    MAX_PORTION_STEPS));
     if (!startFeedCycle(resolvedPortion, MotionType::ManualFeed, "remote-manual")) {
       Serial.println("[REMOTE] feed ignored because motor is busy");
+      // 忙时也推一次 status，让网页能看到 motorRunning=true，不会以为命令丢了
+      publishRemoteStatus(true);
     }
     return;
   }
 
   if (action == "debug") {
+    pulseCommandIndicator();
     String direction = extractCommandValue(payload, "direction");
     direction.toLowerCase();
     const int speed = extractCommandValue(payload, "speed").toInt();
@@ -641,16 +688,21 @@ void handleRemoteCommand(const String &payload) {
     const uint8_t resolvedSpeed = clampDebugSpeedLevel(speed > 0 ? speed : debugSpeedLevel);
     if (!startDebugRun(resolvedDirection, resolvedSpeed)) {
       Serial.println("[REMOTE] debug ignored because motor is busy");
+      publishRemoteStatus(true);
     }
     return;
   }
 
   if (action == "stop") {
+    pulseCommandIndicator();
     stopMotion("remote-stop");
+    // 即使本来就是空闲（stopMotion 早退），也回一条 status 作为命令回执
+    publishRemoteStatus(true);
     return;
   }
 
   if (action == "schedule") {
+    pulseCommandIndicator();
     const String slots = extractCommandValue(payload, "slots");
     const int portion = extractCommandValue(payload, "portion").toInt();
     const uint8_t resolvedPortion = static_cast<uint8_t>(constrain(portion > 0 ? portion : defaultPortionSteps,
@@ -737,7 +789,8 @@ bool connectRemoteBroker() {
   }
 
   mqttClient.publish(remoteAvailabilityTopic().c_str(), "online", true);
-  mqttClient.subscribe(remoteCommandTopic().c_str());
+  // QoS 1：broker 到设备丢包会自动重传，避免命令静默丢失
+  mqttClient.subscribe(remoteCommandTopic().c_str(), 1);
   Serial.printf("[REMOTE] mqtt connected host=%s device=%s\n", MQTT_HOST, REMOTE_DEVICE_ID);
   publishRemoteStatus(true);
   return true;
@@ -975,6 +1028,102 @@ void processSchedule() {
   }
 }
 
+bool probeI2C(uint8_t addr) {
+  Wire.beginTransmission(addr);
+  return Wire.endTransmission() == 0;
+}
+
+void setupLcd() {
+  Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
+  delay(50);
+  uint8_t addr = 0;
+  if (probeI2C(0x27)) {
+    addr = 0x27;
+  } else if (probeI2C(0x3F)) {
+    addr = 0x3F;
+    lcd = LiquidCrystal_I2C(0x3F, LCD_COLS, LCD_ROWS);
+  }
+  if (addr == 0) {
+    lcdPresent = false;
+    Serial.println("[LCD] not detected on I2C (0x27/0x3F), skip");
+    return;
+  }
+  lcdPresent = true;
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("FitPass booting");
+  lcd.setCursor(0, 1);
+  lcd.print("connecting...");
+  Serial.printf("[LCD] detected at 0x%02X\n", addr);
+}
+
+String nextScheduleLabel() {
+  struct tm now;
+  if (!getLocalTime(&now, 10)) {
+    return String("--:--");
+  }
+  int nowMin = now.tm_hour * 60 + now.tm_min;
+  int bestDelta = INT32_MAX;
+  String best = "--:--";
+  for (int i = 0; i < MAX_FEED_SLOTS; ++i) {
+    if (!feedSlots[i].enabled) continue;
+    int slotMin = feedSlots[i].hour * 60 + feedSlots[i].minute;
+    int delta = slotMin - nowMin;
+    if (delta <= 0) delta += 24 * 60;
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%02u:%02u", feedSlots[i].hour, feedSlots[i].minute);
+      best = String(buf);
+    }
+  }
+  return best;
+}
+
+void writeLcdLine(uint8_t row, const String &text) {
+  String padded = text;
+  if (padded.length() > LCD_COLS) padded = padded.substring(0, LCD_COLS);
+  while (padded.length() < LCD_COLS) padded += ' ';
+  lcd.setCursor(0, row);
+  lcd.print(padded);
+}
+
+void updateLcd() {
+  if (!lcdPresent) return;
+  if (millis() - lastLcdUpdateAt < LCD_UPDATE_INTERVAL_MS) return;
+  lastLcdUpdateAt = millis();
+
+  // 第一行：WiFi/IP末段 + 云桥
+  String line1;
+  if (WiFi.status() != WL_CONNECTED) {
+    line1 = "WiFi: OFFLINE";
+  } else {
+    IPAddress ip = WiFi.localIP();
+    char buf[20];
+    snprintf(buf, sizeof(buf), ".%d %s",
+             ip[3],
+             remoteBrokerConnected ? "Cloud OK" : "Cloud..");
+    line1 = buf;
+  }
+
+  // 第二行：当前动作 + 下次定时
+  const char *motion = "Idle";
+  if (motorRunning) {
+    switch (motionType) {
+      case MotionType::ManualFeed:   motion = "Feeding "; break;
+      case MotionType::ScheduleFeed: motion = "Auto Fd "; break;
+      case MotionType::Debug:        motion = "Debug   "; break;
+      default:                       motion = "Running "; break;
+    }
+  }
+  String next = nextScheduleLabel();
+  String line2 = String(motion) + " Nxt " + next;
+
+  writeLcdLine(0, line1);
+  writeLcdLine(1, line2);
+}
+
 void logStatusPeriodically() {
   if (millis() - lastStatusLogAt < 15000) {
     return;
@@ -999,6 +1148,8 @@ void setup() {
     pinMode(pin, OUTPUT);
   }
   releaseStepper();
+  pinMode(COMMAND_INDICATOR_LED_PIN, OUTPUT);
+  setCommandIndicator(false);
 
   if (!LittleFS.begin(true)) {
     Serial.println("[FS] failed to mount LittleFS");
@@ -1007,6 +1158,7 @@ void setup() {
   preferences.begin("fitpass", false);
   loadSchedule();
 
+  setupLcd();
   connectWiFi();
   setupOta();
   connectRemoteBroker();
@@ -1032,7 +1184,9 @@ void loop() {
   }
   maintainRemoteBroker();
   handleOta();
+  updateCommandIndicator();
   updateMotor();
+  updateLcd();
   processSchedule();
   logStatusPeriodically();
   delay(0);

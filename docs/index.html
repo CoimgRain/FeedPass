@@ -700,6 +700,8 @@
       let pendingAuthResolver = null;
       let pendingRemoteCommand = null;
       let remoteHeartbeatTimer = null;
+      let commandAckTimer = null;
+      const commandAckTimeoutMs = 3000;
 
       function fillPortions() {
         for (const select of [manualPortionEl, schedulePortionEl]) {
@@ -886,8 +888,23 @@
           if (!mqttClient || !mqttClient.connected || !ensureUnlocked()) {
             return;
           }
-          mqttClient.publish(commandTopic(), withPinPayload("action=status"), { qos: 0, retain: false });
+          mqttClient.publish(commandTopic(), withPinPayload("action=status"), { qos: 1, retain: false });
         }, remoteHeartbeatIntervalMs);
+      }
+
+      function clearCommandWatchdog() {
+        if (commandAckTimer) {
+          clearTimeout(commandAckTimer);
+          commandAckTimer = null;
+        }
+      }
+
+      function armCommandWatchdog(actionLabel) {
+        clearCommandWatchdog();
+        commandAckTimer = setTimeout(() => {
+          commandAckTimer = null;
+          showMessage(`${actionLabel}未收到板子回应，可能网络丢包，点击重试`, true);
+        }, commandAckTimeoutMs);
       }
 
       function flushPendingRemoteCommand() {
@@ -896,7 +913,8 @@
         }
         const { payload, message } = pendingRemoteCommand;
         pendingRemoteCommand = null;
-        mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 0, retain: false });
+        armCommandWatchdog(message || "指令");
+        mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 1, retain: false });
         activeMode = "remote";
         setMode("正在走外网云桥", true);
         showMessage(message);
@@ -925,12 +943,12 @@
         });
 
         mqttClient.on("connect", () => {
-          mqttClient.subscribe(statusTopic(), { qos: 0 });
-          mqttClient.subscribe(authTopic(), { qos: 0 });
+          mqttClient.subscribe(statusTopic(), { qos: 1 });
+          mqttClient.subscribe(authTopic(), { qos: 1 });
           setMode("外网云桥已连上", true);
           startRemoteHeartbeat();
           if (ensureUnlocked()) {
-            mqttClient.publish(commandTopic(), withPinPayload("action=status"));
+            mqttClient.publish(commandTopic(), withPinPayload("action=status"), { qos: 1, retain: false });
           }
           flushPendingRemoteCommand();
         });
@@ -970,6 +988,8 @@
               activeMode = "remote";
               setMode("正在走外网云桥", true);
               applyStatus(data);
+              // 板子回了 status，说明命令链路通畅，取消未回应告警
+              clearCommandWatchdog();
             } catch (error) {
               showMessage(`远程状态解析失败：${error.message}`, true);
             }
@@ -1006,7 +1026,7 @@
           };
 
           const publishAuth = () => {
-            mqttClient.subscribe(authTopic(), { qos: 0 }, (err) => {
+            mqttClient.subscribe(authTopic(), { qos: 1 }, (err) => {
               if (err) {
                 clearTimeout(timeout);
                 pendingAuthResolver = null;
@@ -1016,7 +1036,7 @@
               mqttClient.publish(
                 commandTopic(),
                 `action=auth&pin=${pin}&nonce=${nonce}`,
-                { qos: 0, retain: false }
+                { qos: 1, retain: false }
               );
             });
           };
@@ -1048,7 +1068,7 @@
         activeMode = "remote";
         ensureMqttConnection();
         if (mqttClient && mqttClient.connected) {
-          mqttClient.publish(commandTopic(), withPinPayload("action=status"));
+          mqttClient.publish(commandTopic(), withPinPayload("action=status"), { qos: 1, retain: false });
           return;
         }
         showMessage("云桥重连中，稍后会自动恢复...", true);
@@ -1078,7 +1098,8 @@
           showMessage("云桥重连中，命令会自动补发...");
           return;
         }
-        mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 0, retain: false });
+        armCommandWatchdog(message);
+        mqttClient.publish(commandTopic(), withPinPayload(payload), { qos: 1, retain: false });
         activeMode = "remote";
         setMode("正在走外网云桥", true);
         showMessage(message);
