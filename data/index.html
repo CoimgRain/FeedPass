@@ -364,6 +364,7 @@
     <script>
       const maxSlots = 6;
       const pinStorageKey = "fitpass-local-access-pin";
+      const quickAccessPin = "0728";
 
       const slotList = document.getElementById("slotList");
       const syncState = document.getElementById("syncState");
@@ -525,31 +526,26 @@
           return;
         }
 
+        if (pin !== quickAccessPin) {
+          lockScreenEl.classList.remove("hidden");
+          setUnlockMessage("控制码不对，再试一次", true);
+          return;
+        }
+
         try {
-          const response = await fetch("/api/unlock", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-            body: new URLSearchParams({ pin }).toString(),
-          });
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || "invalid pin");
-          }
           accessPin = pin;
           localStorage.setItem(pinStorageKey, pin);
           lockScreenEl.classList.add("hidden");
           setUnlockMessage("");
-          applyStatus(data);
-          showMessage("控制窗口已连接");
+          showMessage("控制窗口已解锁");
         } catch (error) {
           showMessage(error.message, true);
-          if (error.message === "invalid pin") {
-            lockScreenEl.classList.remove("hidden");
-            setUnlockMessage("控制码不对，再试一次", true);
-          }
+          lockScreenEl.classList.remove("hidden");
+          setUnlockMessage(error.message, true);
           return;
         }
 
+        refresh().catch(() => {});
         startRefreshLoop();
       }
 

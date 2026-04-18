@@ -658,6 +658,7 @@
     <script>
       const storageKey = "fitpass-unified-control-v1";
       const pinStorageKey = "fitpass-public-access-pin";
+      const quickAccessPin = "0728";
       const defaults = {
         localBaseUrl: "",
         brokerUrl: "wss://broker.emqx.io:8084/mqtt",
@@ -1094,26 +1095,15 @@
           return;
         }
 
+        if (pin !== quickAccessPin) {
+          lockScreenEl.classList.remove("hidden");
+          showUnlockMessage("控制码不对，再试一次", true);
+          return;
+        }
+
         unlockBtnEl.disabled = true;
         try {
-          if (localBaseUrlEl.value.trim()) {
-            showUnlockMessage("正在走本地直连校验...");
-            const response = await fetch(localApi("/api/unlock"), {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-              body: new URLSearchParams({ pin }).toString(),
-            });
-            const data = await response.json();
-            if (!response.ok) {
-              throw new Error(data.error || "invalid pin");
-            }
-          } else {
-            showUnlockMessage(mqttClient && mqttClient.connected
-              ? "正在走外网云桥校验..."
-              : "首次连接云桥较慢，请稍候...");
-            await verifyRemotePin(pin);
-          }
-
+          showUnlockMessage("控制码正确，正在进入...");
           accessPin = pin;
           localStorage.setItem(pinStorageKey, pin);
           lockScreenEl.classList.add("hidden");
@@ -1121,7 +1111,7 @@
           connectUnified();
         } catch (error) {
           lockScreenEl.classList.remove("hidden");
-          showUnlockMessage(error.message === "invalid pin" ? "控制码不对，再试一次" : error.message, true);
+          showUnlockMessage(error.message, true);
         } finally {
           unlockBtnEl.disabled = false;
         }
