@@ -149,3 +149,15 @@
 #ifndef DEVICE_ACCESS_PIN
 #define DEVICE_ACCESS_PIN ""
 #endif
+
+#ifndef OTA_ENABLED
+#define OTA_ENABLED 1
+#endif
+
+#ifndef OTA_HOSTNAME
+#define OTA_HOSTNAME "fitpass"
+#endif
+
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD DEVICE_ACCESS_PIN
+#endif

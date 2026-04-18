@@ -5,6 +5,8 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <ArduinoOTA.h>
+#include <Update.h>
 #include <time.h>
 
 #include "app_config.h"
@@ -767,6 +769,117 @@ void maintainRemoteBroker() {
   connectRemoteBroker();
 }
 
+
+void setupOta() {
+#if OTA_ENABLED
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[OTA] skipped because station Wi-Fi is not connected");
+    return;
+  }
+
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  if (strlen(OTA_PASSWORD) > 0) {
+    ArduinoOTA.setPassword(OTA_PASSWORD);
+  }
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("[OTA] update starting");
+    stopMotion("ota-start");
+    releaseStepper();
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("[OTA] update finished");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] progress=%u%%\n", total ? (progress * 100 / total) : 0);
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] error=%u\n", error);
+  });
+  ArduinoOTA.begin();
+  Serial.printf("[OTA] ready hostname=%s ip=%s\n", OTA_HOSTNAME, WiFi.localIP().toString().c_str());
+#endif
+}
+
+void handleOta() {
+#if OTA_ENABLED
+  ArduinoOTA.handle();
+#endif
+}
+
+bool httpOtaInProgress = false;
+String httpOtaError;
+
+void handleHttpOtaUpload() {
+  HTTPUpload &upload = server.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    if (!isAuthorizedPin(server.arg("pin"))) {
+      httpOtaError = "invalid pin";
+      return;
+    }
+
+    httpOtaInProgress = true;
+    httpOtaError = "";
+    stopMotion("http-ota-start");
+    releaseStepper();
+    Serial.printf("[HTTPOTA] start filename=%s\n", upload.filename.c_str());
+
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+      httpOtaError = "Update.begin failed";
+      Serial.printf("[HTTPOTA] begin failed: %s\n", Update.errorString());
+    }
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!httpOtaError.isEmpty()) {
+      return;
+    }
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      httpOtaError = Update.errorString();
+      Serial.printf("[HTTPOTA] write failed: %s\n", Update.errorString());
+    }
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_END) {
+    if (!httpOtaError.isEmpty()) {
+      Update.abort();
+      httpOtaInProgress = false;
+      return;
+    }
+    if (!Update.end(true)) {
+      httpOtaError = Update.errorString();
+      Serial.printf("[HTTPOTA] end failed: %s\n", Update.errorString());
+    } else {
+      Serial.printf("[HTTPOTA] success size=%u\n", upload.totalSize);
+    }
+    httpOtaInProgress = false;
+    return;
+  }
+
+  if (upload.status == UPLOAD_FILE_ABORTED) {
+    Update.abort();
+    httpOtaError = "upload aborted";
+    httpOtaInProgress = false;
+    Serial.println("[HTTPOTA] aborted");
+  }
+}
+
+void handleHttpOtaComplete() {
+  if (!httpOtaError.isEmpty()) {
+    sendJson(500, String("{\"ok\":false,\"error\":\"") + jsonEscape(httpOtaError) + "\"}");
+    httpOtaError = "";
+    return;
+  }
+
+  sendJson(200, "{\"ok\":true,\"message\":\"firmware written, rebooting\"}");
+  server.client().flush();
+  delay(200);
+  ESP.restart();
+}
+
 void connectWiFi() {
   WiFi.mode(WIFI_AP_STA);
   WiFi.setHostname(DEVICE_NAME);
@@ -814,6 +927,7 @@ void setupRoutes() {
   server.on("/api/debug/start", HTTP_POST, handleDebugStart);
   server.on("/api/debug/stop", HTTP_POST, handleStop);
   server.on("/api/schedule", HTTP_POST, handleScheduleSave);
+  server.on("/api/ota", HTTP_POST, handleHttpOtaComplete, handleHttpOtaUpload);
 }
 
 void updateMotor() {
@@ -894,6 +1008,7 @@ void setup() {
   loadSchedule();
 
   connectWiFi();
+  setupOta();
   connectRemoteBroker();
   syncClock();
   setupRoutes();
@@ -912,7 +1027,11 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  if (httpOtaInProgress) {
+    return;
+  }
   maintainRemoteBroker();
+  handleOta();
   updateMotor();
   processSchedule();
   logStatusPeriodically();
