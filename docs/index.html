@@ -856,7 +856,7 @@
         portionEl.textContent = `${data.defaultPortion || "-"} 份`;
         stationIpEl.textContent = data.stationIp || "未连接";
         remoteConnectedEl.textContent = data.remoteConnected ? "已连上" : "未连上";
-        activeChannelEl.textContent = activeMode === "local" ? "本地直连" : activeMode === "remote" ? "外网云桥" : "-";
+        activeChannelEl.textContent = activeMode === "remote" ? "外网云桥" : "-";
         statusRawEl.value = JSON.stringify(data, null, 2);
 
         if (data.defaultPortion) {
@@ -869,11 +869,6 @@
         }
         if (Array.isArray(data.schedule)) {
           renderSlots(data.schedule.map((item) => item.time));
-        }
-
-        if (!localBaseUrlEl.value.trim() && data.stationIp) {
-          localBaseUrlEl.value = `http://${data.stationIp}`;
-          saveConfig();
         }
       }
 
@@ -1041,18 +1036,8 @@
         }
         saveConfig();
         setMode("连接中", false);
-        showMessage(localBaseUrlEl.value.trim() ? "先尝试本地直连..." : "未填写局域网地址，直接连接外网云桥...");
-
-        const localStatus = await tryLocalStatus();
-        if (localStatus) {
-          activeMode = "local";
-          setMode("正在走本地直连", true);
-          applyStatus(localStatus);
-          showMessage("已连上家里的 ESP32，本地模式优先");
-          return;
-        }
-
-        showMessage(localBaseUrlEl.value.trim() ? "本地直连失败，切换到外网云桥..." : "正在连接外网云桥...");
+        showMessage("正在连接外网云桥...");
+        activeMode = "remote";
         ensureMqttConnection();
       }
 
@@ -1060,23 +1045,13 @@
         if (!ensureUnlocked()) {
           return;
         }
-        if (localBaseUrlEl.value.trim()) {
-          try {
-            const data = await localRequest("/api/status");
-            activeMode = "local";
-            setMode("正在走本地直连", true);
-            applyStatus(data);
-            return;
-          } catch (error) {
-            showMessage("本地直连失效，正在尝试云桥...", true);
-          }
-        }
-
         activeMode = "remote";
         ensureMqttConnection();
         if (mqttClient && mqttClient.connected) {
           mqttClient.publish(commandTopic(), withPinPayload("action=status"));
+          return;
         }
+        showMessage("云桥重连中，稍后会自动恢复...", true);
       }
 
       async function sendLocal(path, form) {
@@ -1118,41 +1093,6 @@
         const slots = collectSlots().join(",");
         const portion = schedulePortionEl.value;
         const manualPortion = manualPortionEl.value;
-
-        try {
-          if (localBaseUrlEl.value.trim()) {
-            if (action === "feed") {
-              await sendLocal("/api/feed", { portion: manualPortion });
-              activeMode = "local";
-              setMode("正在走本地直连", true);
-              showMessage("已发送本地投喂");
-              return;
-            }
-            if (action === "debug") {
-              await sendLocal("/api/debug/start", { direction, speed });
-              activeMode = "local";
-              setMode("正在走本地直连", true);
-              showMessage(`已发送本地调试，速度 ${speed}`);
-              return;
-            }
-            if (action === "stop") {
-              await sendLocal("/api/debug/stop", {});
-              activeMode = "local";
-              setMode("正在走本地直连", true);
-              showMessage("已停止");
-              return;
-            }
-            if (action === "schedule") {
-              await sendLocal("/api/schedule", { slots, portion });
-              activeMode = "local";
-              setMode("正在走本地直连", true);
-              showMessage("已保存本地计划");
-              return;
-            }
-          }
-        } catch (error) {
-          showMessage(`本地发送失败，改走云桥：${error.message}`, true);
-        }
 
         if (action === "feed") {
           sendRemote(`action=feed&portion=${manualPortion}`, "已发送远程投喂");
